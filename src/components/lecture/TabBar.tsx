@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { AlignLeft, BookOpen, List, FileText } from 'lucide-react-native';
+import { AlignLeft, BookOpen, List, FileText, MessageCircle } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '../../constants/theme';
 
-export type TabType = 'summary' | 'flashcards' | 'notes' | 'transcript';
+export type TabType = 'summary' | 'flashcards' | 'notes' | 'transcript' | 'chat';
 
 interface TabBarProps {
   activeTab: TabType;
@@ -16,6 +16,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange }) => {
     { key: 'flashcards', label: 'Cards', icon: BookOpen },
     { key: 'notes', label: 'Notes', icon: List },
     { key: 'transcript', label: 'Text', icon: FileText },
+    { key: 'chat', label: 'Chat', icon: MessageCircle },
   ];
 
   return (

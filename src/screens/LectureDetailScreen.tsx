@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Share, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Share, Alert, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { RefreshCw, AlertCircle } from 'lucide-react-native';
 import { RootStackParamList } from '../../App';
 import { StorageService } from '../services/storage';
-import { Lecture, Folder } from '../types';
+import { OpenAIService } from '../services/openai';
+import { Lecture, Folder, TimestampReference, ChatMessage, ProcessingProgress, AIError } from '../types';
 import { LectureHeader } from '../components/lecture/LectureHeader';
 import { TabBar, TabType } from '../components/lecture/TabBar';
 import { SummaryTab } from '../components/lecture/SummaryTab';
 import { FlashcardsTab } from '../components/lecture/FlashcardsTab';
 import { NotesTab } from '../components/lecture/NotesTab';
 import { TranscriptTab } from '../components/lecture/TranscriptTab';
+import { ChatTab } from '../components/lecture/ChatTab';
 import { EditModal } from '../components/common/EditModal';
 import { MoveFolderModal } from '../components/lecture/MoveFolderModal';
-import { colors } from '../constants/theme';
+import { DetailedProgressModal } from '../components/record/DetailedProgressModal';
+import { ErrorModal } from '../components/common/ErrorModal';
+import { colors, spacing, typography, borderRadius } from '../constants/theme';
 
 type LectureDetailRouteProp = RouteProp<RootStackParamList, 'LectureDetail'>;
 
@@ -25,6 +30,17 @@ export default function LectureDetailScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [showEditTitle, setShowEditTitle] = useState(false);
   const [showMoveFolder, setShowMoveFolder] = useState(false);
+  const [highlightText, setHighlightText] = useState<string | undefined>(undefined);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [progress, setProgress] = useState<ProcessingProgress>({
+    currentStep: 'title_generation',
+    stepNumber: 1,
+    totalSteps: 4,
+    stepName: 'Generating Title',
+    progress: 0,
+  });
+  const [error, setError] = useState<AIError | null>(null);
+  const [showError, setShowError] = useState(false);
 
   useEffect(() => {
     loadLecture();
@@ -88,6 +104,150 @@ export default function LectureDetailScreen() {
     setShowMoveFolder(false);
   };
 
+  const handleUpdateChatHistory = async (chatHistory: ChatMessage[]) => {
+    if (!lecture) return;
+    const updatedLecture = { ...lecture, chatHistory };
+    await StorageService.saveLecture(updatedLecture);
+    setLecture(updatedLecture);
+  };
+
+  const handleTimestampClick = (reference: TimestampReference) => {
+    // Switch to transcript tab
+    setActiveTab('transcript');
+    // Set the text to highlight
+    setHighlightText(reference.text);
+    // Clear highlight after 5 seconds
+    setTimeout(() => {
+      setHighlightText(undefined);
+    }, 5000);
+  };
+
+  const handleRetryProcessing = async () => {
+    if (!lecture) return;
+
+    setIsRetrying(true);
+    setShowError(false);
+
+    try {
+      const updatedLecture = { ...lecture, status: 'processing' as const };
+      await StorageService.saveLecture(updatedLecture);
+      setLecture(updatedLecture);
+
+      // If transcription exists, start from study materials generation
+      if (lecture.transcription) {
+        setProgress({
+          currentStep: 'study_materials',
+          stepNumber: 3,
+          totalSteps: 4,
+          stepName: 'Creating Study Materials',
+          progress: 60,
+          message: 'Generating summary...',
+        });
+
+        const materials = await OpenAIService.generateStudyMaterials(lecture.transcription);
+
+        setProgress(prev => ({ ...prev, progress: 75, message: 'Creating flashcards and notes...' }));
+
+        updatedLecture.summary = materials.summary;
+        updatedLecture.flashcards = materials.flashcards;
+        updatedLecture.notes = materials.notes;
+        await StorageService.saveLecture(updatedLecture);
+
+        setProgress({
+          currentStep: 'assembly',
+          stepNumber: 4,
+          totalSteps: 4,
+          stepName: 'Assembling Learning Pack',
+          progress: 90,
+          message: 'Finalizing your materials...',
+        });
+      } else {
+        // Full retry from transcription
+        setProgress({
+          currentStep: 'transcription',
+          stepNumber: 2,
+          totalSteps: 4,
+          stepName: 'Transcribing Audio',
+          progress: 25,
+          message: 'Converting speech to text...',
+        });
+
+        const transcription = await OpenAIService.transcribeAudio(lecture.audioUri);
+        updatedLecture.transcription = transcription;
+        await StorageService.saveLecture(updatedLecture);
+
+        setProgress({
+          currentStep: 'study_materials',
+          stepNumber: 3,
+          totalSteps: 4,
+          stepName: 'Creating Study Materials',
+          progress: 60,
+          message: 'Generating summary...',
+        });
+
+        const materials = await OpenAIService.generateStudyMaterials(transcription);
+
+        setProgress(prev => ({ ...prev, progress: 75, message: 'Creating flashcards and notes...' }));
+
+        updatedLecture.summary = materials.summary;
+        updatedLecture.flashcards = materials.flashcards;
+        updatedLecture.notes = materials.notes;
+        await StorageService.saveLecture(updatedLecture);
+
+        setProgress({
+          currentStep: 'assembly',
+          stepNumber: 4,
+          totalSteps: 4,
+          stepName: 'Assembling Learning Pack',
+          progress: 90,
+          message: 'Finalizing your materials...',
+        });
+      }
+
+      // Validate and complete
+      const isComplete = !!(
+        updatedLecture.summary &&
+        updatedLecture.flashcards &&
+        updatedLecture.flashcards.length > 0 &&
+        updatedLecture.notes
+      );
+
+      if (!isComplete) {
+        throw new Error('Learning Pack incomplete - missing materials');
+      }
+
+      updatedLecture.status = 'processed';
+      updatedLecture.errorMessage = undefined;
+      updatedLecture.lastProcessingStep = undefined;
+      await StorageService.saveLecture(updatedLecture);
+
+      setProgress(prev => ({ ...prev, progress: 100, message: 'Complete!' }));
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      setIsRetrying(false);
+      setLecture(updatedLecture);
+      Alert.alert('Success', 'Lecture processed successfully!');
+    } catch (error) {
+      console.error('Retry failed', error);
+
+      const aiError = error as AIError;
+      setError(aiError);
+
+      if (lecture) {
+        const failedLecture = { ...lecture };
+        failedLecture.status = 'failed';
+        failedLecture.errorMessage = aiError.message;
+        failedLecture.lastProcessingStep = aiError.step;
+        await StorageService.saveLecture(failedLecture);
+        setLecture(failedLecture);
+      }
+
+      setIsRetrying(false);
+      setShowError(true);
+    }
+  };
+
   if (!lecture) {
     return (
       <View style={styles.loadingContainer}>
@@ -107,6 +267,27 @@ export default function LectureDetailScreen() {
         onMoveToFolder={() => setShowMoveFolder(true)}
       />
 
+      {lecture.status === 'failed' && (
+        <View style={styles.errorBanner}>
+          <View style={styles.errorBannerContent}>
+            <AlertCircle size={20} color={colors.danger} />
+            <View style={styles.errorBannerText}>
+              <Text style={styles.errorBannerTitle}>Processing Failed</Text>
+              <Text style={styles.errorBannerMessage}>
+                {lecture.errorMessage || 'An error occurred while processing this lecture.'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={handleRetryProcessing}
+          >
+            <RefreshCw size={16} color={colors.background.primary} />
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <View style={styles.content}>
@@ -116,7 +297,20 @@ export default function LectureDetailScreen() {
         )}
         {activeTab === 'notes' && <NotesTab notes={lecture.notes} />}
         {activeTab === 'transcript' && (
-          <TranscriptTab transcription={lecture.transcription} />
+          <TranscriptTab
+            transcription={lecture.transcription}
+            highlightText={highlightText}
+          />
+        )}
+        {activeTab === 'chat' && (
+          <ChatTab
+            lectureId={lecture.id}
+            transcription={lecture.transcription}
+            notes={lecture.notes}
+            chatHistory={lecture.chatHistory || []}
+            onUpdateChatHistory={handleUpdateChatHistory}
+            onTimestampClick={handleTimestampClick}
+          />
         )}
       </View>
 
@@ -136,6 +330,21 @@ export default function LectureDetailScreen() {
         onClose={() => setShowMoveFolder(false)}
         onSelectFolder={handleMoveToFolder}
       />
+
+      <DetailedProgressModal visible={isRetrying} progress={progress} />
+
+      {error && (
+        <ErrorModal
+          visible={showError}
+          error={error}
+          onRetry={error.retryable ? handleRetryProcessing : undefined}
+          onClose={() => setShowError(false)}
+          onGoToSettings={() => {
+            setShowError(false);
+            navigation.navigate('MainTabs', { screen: 'Settings' });
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -149,6 +358,48 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorBanner: {
+    backgroundColor: colors.danger + '10',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.danger,
+    padding: spacing.lg,
+    margin: spacing.lg,
+    marginBottom: 0,
+    borderRadius: borderRadius.md,
+    gap: spacing.md,
+  },
+  errorBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  errorBannerText: {
+    flex: 1,
+  },
+  errorBannerTitle: {
+    ...typography.callout,
+    color: colors.danger,
+    marginBottom: spacing.xs,
+  },
+  errorBannerMessage: {
+    ...typography.footnote,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+  },
+  retryButtonText: {
+    ...typography.callout,
+    color: colors.background.primary,
+    fontWeight: '600',
   },
   content: {
     flex: 1,

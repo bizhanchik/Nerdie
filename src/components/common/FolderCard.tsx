@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Folder as FolderIcon, ChevronRight } from 'lucide-react-native';
 import { Folder } from '../../types';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 interface FolderCardProps {
   folder: Folder;
@@ -44,6 +44,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    ...shadows.small,
   },
   content: {
     flexDirection: 'row',
@@ -51,8 +52,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.headline,
     color: colors.text.secondary,
   },
   rightContent: {
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   count: {
-    fontSize: 14,
+    ...typography.subheadline,
     color: colors.text.tertiary,
   },
 });

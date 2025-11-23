@@ -21,6 +21,7 @@ import { useLectures } from '../hooks/useLectures';
 import { useFolders } from '../hooks/useFolders';
 import { LectureCard } from '../components/common/LectureCard';
 import { FolderCard } from '../components/common/FolderCard';
+import { LoadingCard } from '../components/common/LoadingCard';
 import { FAB } from '../components/common/FAB';
 import { EditModal } from '../components/common/EditModal';
 import ScreenWrapper from '../components/ScreenWrapper';
@@ -33,7 +34,7 @@ type HomeScreenNavigationProp = CompositeNavigationProp<
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { lectures, loadLectures, deleteLecture, saveLecture } = useLectures();
+  const { lectures, loading, loadLectures, deleteLecture, saveLecture } = useLectures();
   const { folders, loadFolders, createFolder, deleteFolder } = useFolders();
   const [currentFolder, setCurrentFolder] = useState<Folder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,47 +146,53 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <FlatList
-          data={combinedData}
-          renderItem={({ item }) => {
-            if ('name' in item && 'createdAt' in item) {
-              const folder = item as Folder;
+        {loading && combinedData.length === 0 ? (
+          <View style={styles.listContent}>
+            <LoadingCard count={5} />
+          </View>
+        ) : (
+          <FlatList
+            data={combinedData}
+            renderItem={({ item }) => {
+              if ('name' in item && 'createdAt' in item) {
+                const folder = item as Folder;
+                return (
+                  <FolderCard
+                    folder={folder}
+                    lectureCount={lectures.filter((l) => l.folderId === folder.id).length}
+                    onPress={() => setCurrentFolder(folder)}
+                    onLongPress={() => handleDeleteFolder(folder.id)}
+                  />
+                );
+              }
+              const lecture = item as Lecture;
               return (
-                <FolderCard
-                  folder={folder}
-                  lectureCount={lectures.filter((l) => l.folderId === folder.id).length}
-                  onPress={() => setCurrentFolder(folder)}
-                  onLongPress={() => handleDeleteFolder(folder.id)}
+                <LectureCard
+                  lecture={lecture}
+                  onPress={() =>
+                    navigation.navigate('LectureDetail', { lectureId: lecture.id })
+                  }
+                  onEdit={() => handleEditLecture(lecture)}
+                  onDelete={() => handleDeleteLecture(lecture.id)}
                 />
               );
+            }}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
-            const lecture = item as Lecture;
-            return (
-              <LectureCard
-                lecture={lecture}
-                onPress={() =>
-                  navigation.navigate('LectureDetail', { lectureId: lecture.id })
-                }
-                onEdit={() => handleEditLecture(lecture)}
-                onDelete={() => handleDeleteLecture(lecture.id)}
-              />
-            );
-          }}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                {currentFolder
-                  ? 'No lectures in this folder.'
-                  : 'No lectures recorded yet.'}
-              </Text>
-            </View>
-          }
-        />
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>
+                  {currentFolder
+                    ? 'No lectures in this folder.'
+                    : 'No lectures recorded yet.'}
+                </Text>
+              </View>
+            }
+          />
+        )}
 
         <View style={styles.fabContainer}>
           <FAB
