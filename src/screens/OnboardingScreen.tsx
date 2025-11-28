@@ -13,34 +13,36 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { UserProfile } from "../types";
 import { StorageService } from "../services/storage";
 import { detectDeviceLanguage } from "../services/openai";
+import { useTranslation } from "../i18n/i18nContext";
 
 interface OnboardingScreenProps {
   onComplete: () => void;
 }
 
-const COMMON_INTERESTS = [
-  "Sports",
-  "Music",
-  "Art",
-  "Technology",
-  "Science",
-  "History",
-  "Literature",
-  "Gaming",
-  "Movies",
-  "Cooking",
-  "Travel",
-  "Fashion",
-  "Photography",
-  "Nature",
-  "Mathematics",
-];
-
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [age, setAge] = useState("");
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [customInterest, setCustomInterest] = useState("");
+
+  const COMMON_INTERESTS = [
+    t.interestSports,
+    t.interestMusic,
+    t.interestArt,
+    t.interestTechnology,
+    t.interestScience,
+    t.interestHistory,
+    t.interestLiterature,
+    t.interestGaming,
+    t.interestMovies,
+    t.interestCooking,
+    t.interestTravel,
+    t.interestFashion,
+    t.interestPhotography,
+    t.interestNature,
+    t.interestMathematics,
+  ];
 
   const toggleInterest = (interest: string) => {
     if (selectedInterests.includes(interest)) {
@@ -87,9 +89,9 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome to Nerdie!</Text>
+            <Text style={styles.title}>{t.onboardingTitle}</Text>
             <Text style={styles.subtitle}>
-              Let's personalize your learning experience
+              {t.onboardingSubtitle}
             </Text>
             <View style={styles.progressContainer}>
               <View style={[styles.progressDot, step >= 1 && styles.progressDotActive]} />
@@ -100,15 +102,15 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
           {step === 1 ? (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>How old are you?</Text>
+              <Text style={styles.stepTitle}>{t.ageQuestion}</Text>
               <Text style={styles.stepDescription}>
-                This helps us tailor lessons to your level
+                {t.ageDescription}
               </Text>
               <TextInput
                 style={styles.ageInput}
                 value={age}
                 onChangeText={setAge}
-                placeholder="Enter your age"
+                placeholder={t.ageInputPlaceholder}
                 keyboardType="number-pad"
                 maxLength={3}
                 autoFocus
@@ -118,14 +120,14 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                 onPress={() => setStep(2)}
                 disabled={!canProceedToStep2}
               >
-                <Text style={styles.buttonText}>Next</Text>
+                <Text style={styles.buttonText}>{t.next}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>What are your interests?</Text>
+              <Text style={styles.stepTitle}>{t.interestsQuestion}</Text>
               <Text style={styles.stepDescription}>
-                We'll use these to create relatable examples in your lessons
+                {t.interestsDescription}
               </Text>
 
               <View style={styles.interestsContainer}>
@@ -156,7 +158,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   style={styles.customInterestInput}
                   value={customInterest}
                   onChangeText={setCustomInterest}
-                  placeholder="Add your own interest"
+                  placeholder={t.addCustomInterest}
                   onSubmitEditing={addCustomInterest}
                   returnKeyType="done"
                 />
@@ -165,13 +167,13 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   onPress={addCustomInterest}
                   disabled={!customInterest.trim()}
                 >
-                  <Text style={styles.addButtonText}>Add</Text>
+                  <Text style={styles.addButtonText}>{t.addButton}</Text>
                 </TouchableOpacity>
               </View>
 
               {selectedInterests.length > 0 && (
                 <View style={styles.selectedContainer}>
-                  <Text style={styles.selectedTitle}>Selected ({selectedInterests.length}):</Text>
+                  <Text style={styles.selectedTitle}>{t.selectedCount} ({selectedInterests.length}):</Text>
                   <View style={styles.selectedChips}>
                     {selectedInterests.map((interest) => (
                       <View key={interest} style={styles.selectedChip}>
@@ -190,14 +192,14 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   style={styles.backButton}
                   onPress={() => setStep(1)}
                 >
-                  <Text style={styles.backButtonText}>Back</Text>
+                  <Text style={styles.backButtonText}>{t.back}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.button, styles.buttonFlex, !canComplete && styles.buttonDisabled]}
                   onPress={handleComplete}
                   disabled={!canComplete}
                 >
-                  <Text style={styles.buttonText}>Get Started</Text>
+                  <Text style={styles.buttonText}>{t.getStarted}</Text>
                 </TouchableOpacity>
               </View>
             </View>

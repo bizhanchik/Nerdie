@@ -1,68 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { StorageService } from '../services/storage';
 import { OpenAIService } from '../services/openai';
 import { Lecture, ProcessingProgress, AIError, Lesson } from '../types';
-import { useRecording } from '../hooks/useRecording';
-import { WaveformVisualizer } from '../components/record/WaveformVisualizer';
-import { RecordingHeader } from '../components/record/RecordingHeader';
-import { StopButton } from '../components/record/StopButton';
 import { DetailedProgressModal } from '../components/record/DetailedProgressModal';
 import { ErrorModal } from '../components/common/ErrorModal';
-import { UploadPhotosModal } from '../components/common/UploadPhotosModal';
 import { colors } from '../constants/theme';
-import { Audio } from 'expo-av';
 
-type RecordScreenNavigationProp = NativeStackNavigationProp<
+type ProcessPhotosRouteProp = RouteProp<RootStackParamList, 'ProcessPhotos'>;
+type ProcessPhotosNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  'Record'
+  'ProcessPhotos'
 >;
 
-export default function RecordScreen() {
-  const navigation = useNavigation<RecordScreenNavigationProp>();
-  const { metering, startRecording, stopRecording, cleanup } = useRecording();
-  const [isProcessing, setIsProcessing] = useState(false);
+export default function ProcessPhotosScreen() {
+  const route = useRoute<ProcessPhotosRouteProp>();
+  const navigation = useNavigation<ProcessPhotosNavigationProp>();
+  const { photoUris } = route.params;
+  const [isProcessing, setIsProcessing] = useState(true);
   const [progress, setProgress] = useState<ProcessingProgress>({
     currentStep: 'title_generation',
     stepNumber: 1,
     totalSteps: 4,
-    stepName: 'Generating Title',
+    stepName: 'Processing Photos',
     progress: 0,
   });
   const [error, setError] = useState<AIError | null>(null);
   const [showError, setShowError] = useState(false);
   const [currentLectureId, setCurrentLectureId] = useState<string | null>(null);
-  const [showUploadPhotos, setShowUploadPhotos] = useState(false);
-  const [completedLectureId, setCompletedLectureId] = useState<string | null>(null);
 
   useEffect(() => {
-    startRecording().catch((error) => {
-      console.error('Failed to start recording', error);
-      navigation.goBack();
-    });
-
-    return cleanup;
+    processPhotos();
   }, []);
 
-  const handleStopRecording = async () => {
-    const result = await stopRecording();
-    if (!result || !result.uri) return;
-
-    await processRecording(result.uri, result.duration);
-  };
-
-  const extractAudioSnippet = async (uri: string, maxDurationSeconds: number = 30): Promise<string> => {
-    // For now, we'll use the full audio and rely on the transcription being cut short
-    // In a more sophisticated implementation, you could use FFmpeg to extract a snippet
-    // For this MVP, we'll transcribe the full audio and use the first portion for title generation
-    return uri;
-  };
-
-  const processRecording = async (uri: string, duration: number) => {
+  const processPhotos = async () => {
     setIsProcessing(true);
     const lectureId = Date.now().toString();
     setCurrentLectureId(lectureId);
@@ -70,59 +45,51 @@ export default function RecordScreen() {
     try {
       const newLecture: Lecture = {
         id: lectureId,
-        title: `Lecture ${new Date().toLocaleDateString()}`, // Temporary title
+        title: `Notes ${new Date().toLocaleDateString()}`,
         date: Date.now(),
-        audioUri: uri,
-        duration: duration,
+        audioUri: '', // No audio for photo-only lectures
+        duration: 0,
+        photoUris: photoUris,
         status: 'processing',
       };
 
       await StorageService.saveLecture(newLecture);
 
-      // Step 1: Generate Title (25% of progress)
+      // Step 1: Extract text from photos (25%)
       setProgress({
         currentStep: 'title_generation',
         stepNumber: 1,
         totalSteps: 4,
-        stepName: 'Generating Title',
-        progress: 0,
-        message: 'Analyzing audio content...',
+        stepName: 'Analyzing Photos',
+        progress: 10,
+        message: 'Extracting text from photos...',
       });
 
-      // Extract snippet and transcribe for title
-      const snippetUri = await extractAudioSnippet(uri, 30);
+      const extractedText = await OpenAIService.extractTextFromPhotos(photoUris);
 
-      setProgress(prev => ({ ...prev, progress: 10, message: 'Transcribing audio snippet...' }));
-      const fullTranscription = await OpenAIService.transcribeAudio(uri);
-
-      // Use first 200 words for title generation
-      const words = fullTranscription.split(' ');
-      const snippetTranscription = words.slice(0, Math.min(200, words.length)).join(' ');
-
-      setProgress(prev => ({ ...prev, progress: 20, message: 'Creating intelligent title...' }));
+      setProgress(prev => ({ ...prev, progress: 30, message: 'Generating title...' }));
       let lectureTitle: string;
       try {
-        lectureTitle = await OpenAIService.generateLectureTitle(snippetTranscription);
+        const snippet = extractedText.slice(0, 500);
+        lectureTitle = await OpenAIService.generateLectureTitle(snippet);
       } catch (titleError) {
         console.warn('Title generation failed, using fallback', titleError);
-        lectureTitle = `Lecture ${new Date().toLocaleDateString()}`;
+        lectureTitle = `Notes ${new Date().toLocaleDateString()}`;
       }
 
       newLecture.title = lectureTitle;
-      newLecture.transcription = fullTranscription;
       await StorageService.saveLecture(newLecture);
 
-      // Step 2: Transcription (already done above, mark as complete - 50%)
+      // Step 2: Transcription equivalent (50%)
       setProgress({
         currentStep: 'transcription',
         stepNumber: 2,
         totalSteps: 4,
-        stepName: 'Transcribing Audio',
+        stepName: 'Processing Content',
         progress: 50,
-        message: 'Transcription complete!',
+        message: 'Content extracted!',
       });
 
-      // Brief pause to show completion
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Step 3: Generate Study Materials (75%)
@@ -135,10 +102,7 @@ export default function RecordScreen() {
         message: 'Generating summary...',
       });
 
-      // Use generateStudyMaterialsWithPhotos if photos are available
-      const materials = newLecture.photoUris && newLecture.photoUris.length > 0
-        ? await OpenAIService.generateStudyMaterialsWithPhotos(fullTranscription, newLecture.photoUris)
-        : await OpenAIService.generateStudyMaterials(fullTranscription);
+      const materials = await OpenAIService.generateStudyMaterials(extractedText);
 
       setProgress(prev => ({ ...prev, progress: 75, message: 'Creating flashcards and notes...' }));
 
@@ -147,7 +111,7 @@ export default function RecordScreen() {
       newLecture.notes = materials.notes;
       await StorageService.saveLecture(newLecture);
 
-      // Step 4: Assembly and Lesson Generation (100%)
+      // Step 4: Assembly (100%)
       setProgress({
         currentStep: 'assembly',
         stepNumber: 4,
@@ -157,7 +121,6 @@ export default function RecordScreen() {
         message: 'Finalizing your materials...',
       });
 
-      // Validate Learning Pack
       const isComplete = !!(
         newLecture.summary &&
         newLecture.flashcards &&
@@ -180,7 +143,7 @@ export default function RecordScreen() {
 
         const lessonData = await OpenAIService.generatePersonalizedLesson(
           newLecture.title,
-          fullTranscription,
+          extractedText,
           newLecture.summary!,
           newLecture.notes!,
           userProfile
@@ -202,24 +165,20 @@ export default function RecordScreen() {
         setProgress(prev => ({ ...prev, progress: 95, message: 'Lesson created successfully!' }));
       } catch (lessonError) {
         console.warn('Lesson generation failed, but continuing', lessonError);
-        // Don't fail the whole process if lesson generation fails
       }
 
       setProgress(prev => ({ ...prev, progress: 100, message: 'Complete!' }));
 
-      // Brief pause to show completion
       await new Promise(resolve => setTimeout(resolve, 800));
 
       setIsProcessing(false);
-      setCompletedLectureId(newLecture.id);
-      setShowUploadPhotos(true);
+      navigation.replace('LectureDetail', { lectureId: newLecture.id });
     } catch (error) {
       console.error('Processing failed', error);
 
       const aiError = error as AIError;
       setError(aiError);
 
-      // Save lecture with error details
       const lectures = await StorageService.getLectures();
       const current = lectures.find((l) => l.id === lectureId);
       if (current) {
@@ -236,13 +195,8 @@ export default function RecordScreen() {
 
   const handleRetry = () => {
     setShowError(false);
-    if (currentLectureId) {
-      StorageService.getLectures().then(lectures => {
-        const lecture = lectures.find(l => l.id === currentLectureId);
-        if (lecture) {
-          processRecording(lecture.audioUri, lecture.duration);
-        }
-      });
+    if (currentLectureId && photoUris) {
+      processPhotos();
     }
   };
 
@@ -253,16 +207,6 @@ export default function RecordScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <RecordingHeader />
-
-      <View style={styles.content}>
-        <WaveformVisualizer metering={metering} />
-      </View>
-
-      <View style={styles.footer}>
-        <StopButton onPress={handleStopRecording} />
-      </View>
-
       <DetailedProgressModal visible={isProcessing} progress={progress} />
 
       {error && (
@@ -277,24 +221,6 @@ export default function RecordScreen() {
           }}
         />
       )}
-
-      <UploadPhotosModal
-        visible={showUploadPhotos}
-        lectureId={completedLectureId || ''}
-        onClose={() => {
-          setShowUploadPhotos(false);
-          if (completedLectureId) {
-            navigation.replace('LectureDetail', { lectureId: completedLectureId });
-          }
-        }}
-        onUpload={() => {
-          setShowUploadPhotos(false);
-          // Navigate to camera with lecture ID to add photos to existing lecture
-          if (completedLectureId) {
-            navigation.navigate('Camera', { lectureId: completedLectureId });
-          }
-        }}
-      />
     </SafeAreaView>
   );
 }
@@ -304,13 +230,5 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footer: {
-    padding: 40,
-    alignItems: 'center',
-  },
 });
+

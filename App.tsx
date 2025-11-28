@@ -15,11 +15,16 @@ import LessonsScreen from "./src/screens/LessonsScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LessonTakeScreen from "./src/screens/LessonTakeScreen";
+import CameraScreen from "./src/screens/CameraScreen";
+import ProcessPhotosScreen from "./src/screens/ProcessPhotosScreen";
 import { StorageService } from "./src/services/storage";
+import { I18nProvider } from "./src/i18n/i18nContext";
 
 export type RootStackParamList = {
   MainTabs: undefined;
   Record: undefined;
+  Camera: { lectureId?: string } | undefined;
+  ProcessPhotos: { photoUris: string[] };
   LectureDetail: { lectureId: string };
   LessonDetail: { lessonId: string };
 };
@@ -114,8 +119,10 @@ export default function App() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <OnboardingScreen onComplete={handleOnboardingComplete} />
-          <StatusBar style="auto" />
+          <I18nProvider>
+            <OnboardingScreen onComplete={handleOnboardingComplete} />
+            <StatusBar style="auto" />
+          </I18nProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
@@ -124,39 +131,51 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <Stack.Navigator
-            initialRouteName="MainTabs"
-            screenOptions={{
-              headerStyle: { backgroundColor: "#fff" },
-              headerShadowVisible: false,
-              headerTitleStyle: { fontWeight: "bold" },
-              contentStyle: { backgroundColor: "#fff" },
-            }}
-          >
-            <Stack.Screen
-              name="MainTabs"
-              component={TabNavigator}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Record"
-              component={RecordScreen}
-              options={{ title: "New Recording", presentation: "modal" }}
-            />
-            <Stack.Screen
-              name="LectureDetail"
-              component={LectureDetailScreen}
-              options={{ title: "Lecture Details" }}
-            />
-            <Stack.Screen
-              name="LessonDetail"
-              component={LessonTakeScreen}
-              options={{ title: "Lesson" }}
-            />
-          </Stack.Navigator>
-          <StatusBar style="auto" />
-        </NavigationContainer>
+        <I18nProvider>
+          <NavigationContainer>
+            <Stack.Navigator
+              initialRouteName="MainTabs"
+              screenOptions={{
+                headerStyle: { backgroundColor: "#fff" },
+                headerShadowVisible: false,
+                headerTitleStyle: { fontWeight: "bold" },
+                contentStyle: { backgroundColor: "#fff" },
+              }}
+            >
+              <Stack.Screen
+                name="MainTabs"
+                component={TabNavigator}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Record"
+                component={RecordScreen}
+                options={{ title: "New Recording", presentation: "modal" }}
+              />
+              <Stack.Screen
+                name="Camera"
+                component={CameraScreen}
+                options={{ title: "Take Photos", presentation: "modal" }}
+              />
+              <Stack.Screen
+                name="ProcessPhotos"
+                component={ProcessPhotosScreen}
+                options={{ headerShown: false, presentation: "modal" }}
+              />
+              <Stack.Screen
+                name="LectureDetail"
+                component={LectureDetailScreen}
+                options={{ title: "Lecture Details" }}
+              />
+              <Stack.Screen
+                name="LessonDetail"
+                component={LessonTakeScreen}
+                options={{ title: "Lesson" }}
+              />
+            </Stack.Navigator>
+            <StatusBar style="auto" />
+          </NavigationContainer>
+        </I18nProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -10,11 +10,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Save, Key, Globe } from "lucide-react-native";
+import { Save, Key, Globe, Languages } from "lucide-react-native";
 import { setOpenAIApiKey } from "../services/openai";
 import { StorageService } from "../services/storage";
 import { SupportedLanguage } from "../types";
 import ScreenWrapper from "../components/ScreenWrapper";
+import { useTranslation } from "../i18n/i18nContext";
 
 const LANGUAGES = [
   { code: 'en' as SupportedLanguage, name: 'English', nativeName: 'English' },
@@ -23,8 +24,9 @@ const LANGUAGES = [
 ];
 
 export default function SettingsScreen() {
+  const { t, language, setLanguage } = useTranslation();
   const [apiKey, setApiKey] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>('en');
+  const [selectedLessonLanguage, setSelectedLessonLanguage] = useState<SupportedLanguage>('en');
 
   useEffect(() => {
     loadApiKey();
@@ -47,7 +49,7 @@ export default function SettingsScreen() {
     try {
       const profile = await StorageService.getUserProfile();
       if (profile) {
-        setSelectedLanguage(profile.language);
+        setSelectedLessonLanguage(profile.language);
       }
     } catch (e) {
       console.error("Failed to load language", e);
@@ -58,23 +60,32 @@ export default function SettingsScreen() {
     try {
       await AsyncStorage.setItem("OPENAI_API_KEY", apiKey);
       setOpenAIApiKey(apiKey);
-      Alert.alert("Success", "API Key saved!");
+      Alert.alert(t.success, t.apiKeySaved);
     } catch (e) {
-      Alert.alert("Error", "Failed to save API key");
+      Alert.alert(t.error, "Failed to save API key");
     }
   };
 
-  const handleLanguageChange = async (language: SupportedLanguage) => {
+  const handleUILanguageChange = async (lang: SupportedLanguage) => {
+    try {
+      await setLanguage(lang);
+      Alert.alert(t.success, t.languageUpdated);
+    } catch (e) {
+      Alert.alert(t.error, "Failed to update language");
+    }
+  };
+
+  const handleLessonLanguageChange = async (lang: SupportedLanguage) => {
     try {
       const profile = await StorageService.getUserProfile();
       if (profile) {
-        profile.language = language;
+        profile.language = lang;
         await StorageService.saveUserProfile(profile);
-        setSelectedLanguage(language);
-        Alert.alert("Success", "Language preference updated!");
+        setSelectedLessonLanguage(lang);
+        Alert.alert(t.success, t.languageUpdated);
       }
     } catch (e) {
-      Alert.alert("Error", "Failed to update language");
+      Alert.alert(t.error, "Failed to update language");
     }
   };
 
@@ -82,63 +93,99 @@ export default function SettingsScreen() {
     <ScreenWrapper>
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerTitle}>{t.settingsTitle}</Text>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Key size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>OpenAI API Key</Text>
+              <Text style={styles.sectionTitle}>{t.apiKeySection}</Text>
             </View>
 
             <Text style={styles.description}>
-              Enter your OpenAI API key to enable transcription and AI features.
-              Your key is stored locally on your device.
+              {t.apiKeyDescription}
             </Text>
 
             <TextInput
               style={styles.input}
               value={apiKey}
               onChangeText={setApiKey}
-              placeholder="sk-..."
+              placeholder={t.apiKeyPlaceholder}
               autoCapitalize="none"
               secureTextEntry
             />
 
             <TouchableOpacity style={styles.saveButton} onPress={saveApiKey}>
               <Save size={20} color="#fff" />
-              <Text style={styles.saveButtonText}>Save Key</Text>
+              <Text style={styles.saveButtonText}>{t.saveKey}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Globe size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>Lesson Language</Text>
+              <Languages size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>{t.appLanguageSection}</Text>
             </View>
 
             <Text style={styles.description}>
-              Choose the language for generated lessons. This affects all new lessons created from lectures.
+              {t.appLanguageDescription}
             </Text>
 
             {LANGUAGES.map((lang) => (
               <TouchableOpacity
-                key={lang.code}
+                key={`ui-${lang.code}`}
                 style={[
                   styles.languageOption,
-                  selectedLanguage === lang.code && styles.languageOptionSelected,
+                  language === lang.code && styles.languageOptionSelected,
                 ]}
-                onPress={() => handleLanguageChange(lang.code)}
+                onPress={() => handleUILanguageChange(lang.code)}
               >
                 <View style={styles.languageInfo}>
                   <Text style={[
                     styles.languageName,
-                    selectedLanguage === lang.code && styles.languageNameSelected,
+                    language === lang.code && styles.languageNameSelected,
                   ]}>
                     {lang.nativeName}
                   </Text>
                   <Text style={styles.languageEnglishName}>{lang.name}</Text>
                 </View>
-                {selectedLanguage === lang.code && (
+                {language === lang.code && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Globe size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>{t.lessonLanguageSection}</Text>
+            </View>
+
+            <Text style={styles.description}>
+              {t.lessonLanguageDescription}
+            </Text>
+
+            {LANGUAGES.map((lang) => (
+              <TouchableOpacity
+                key={`lesson-${lang.code}`}
+                style={[
+                  styles.languageOption,
+                  selectedLessonLanguage === lang.code && styles.languageOptionSelected,
+                ]}
+                onPress={() => handleLessonLanguageChange(lang.code)}
+              >
+                <View style={styles.languageInfo}>
+                  <Text style={[
+                    styles.languageName,
+                    selectedLessonLanguage === lang.code && styles.languageNameSelected,
+                  ]}>
+                    {lang.nativeName}
+                  </Text>
+                  <Text style={styles.languageEnglishName}>{lang.name}</Text>
+                </View>
+                {selectedLessonLanguage === lang.code && (
                   <View style={styles.checkmark}>
                     <Text style={styles.checkmarkText}>✓</Text>
                   </View>

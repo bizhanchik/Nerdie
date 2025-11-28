@@ -13,7 +13,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CompositeNavigationProp } from '@react-navigation/native';
-import { ArrowLeft, Folder as FolderIcon, Mic } from 'lucide-react-native';
+import { ArrowLeft, Folder as FolderIcon, Mic, Camera } from 'lucide-react-native';
 import { RootStackParamList, TabParamList } from '../../App';
 import { StorageService } from '../services/storage';
 import { Lecture, Folder } from '../types';
@@ -26,6 +26,7 @@ import { FAB } from '../components/common/FAB';
 import { EditModal } from '../components/common/EditModal';
 import ScreenWrapper from '../components/ScreenWrapper';
 import { colors, spacing, typography } from '../constants/theme';
+import { useTranslation } from '../i18n/i18nContext';
 
 type HomeScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<TabParamList, 'Home'>,
@@ -33,6 +34,7 @@ type HomeScreenNavigationProp = CompositeNavigationProp<
 >;
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { lectures, loading, loadLectures, deleteLecture, saveLecture } = useLectures();
   const { folders, loadFolders, createFolder, deleteFolder } = useFolders();
@@ -65,12 +67,12 @@ export default function HomeScreen() {
 
   const handleDeleteFolder = async (folderId: string) => {
     Alert.alert(
-      'Delete Folder',
-      'Are you sure you want to delete this folder? Lectures inside will be moved to the main list.',
+      t.deleteFolder,
+      t.deleteFolderMessage,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             const folderLectures = lectures.filter((l) => l.folderId === folderId);
@@ -101,12 +103,12 @@ export default function HomeScreen() {
 
   const handleDeleteLecture = (lectureId: string) => {
     Alert.alert(
-      'Delete Lecture',
-      'Are you sure you want to delete this lecture?',
+      t.deleteConfirm,
+      t.deleteMessage,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: t.delete,
           style: 'destructive',
           onPress: async () => {
             await deleteLecture(lectureId);
@@ -138,7 +140,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ) : (
             <View style={styles.mainHeader}>
-              <Text style={styles.headerTitle}>Lectures</Text>
+              <Text style={styles.headerTitle}>{t.myLectures}</Text>
               <TouchableOpacity onPress={() => setShowCreateFolder(true)}>
                 <FolderIcon size={24} color={colors.primary} />
               </TouchableOpacity>
@@ -186,8 +188,8 @@ export default function HomeScreen() {
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>
                   {currentFolder
-                    ? 'No lectures in this folder.'
-                    : 'No lectures recorded yet.'}
+                    ? t.noLecturesInFolder
+                    : t.noLectures}
                 </Text>
               </View>
             }
@@ -196,25 +198,32 @@ export default function HomeScreen() {
 
         <View style={styles.fabContainer}>
           <FAB
+            icon={<Camera color="#fff" size={28} />}
+            onPress={() => navigation.navigate('Camera')}
+            color={colors.primary}
+            style={styles.cameraFab}
+          />
+          <FAB
             icon={<Mic color="#fff" size={32} />}
             onPress={() => navigation.navigate('Record')}
+            style={styles.micFab}
           />
         </View>
 
         <EditModal
           visible={showCreateFolder}
-          title="New Folder"
+          title={t.newFolder}
           value=""
-          placeholder="Folder Name"
+          placeholder={t.folderName}
           onClose={() => setShowCreateFolder(false)}
           onSave={handleCreateFolder}
         />
 
         <EditModal
           visible={showEditLecture}
-          title="Edit Lecture Title"
+          title={t.editLectureTitle}
           value={editingLecture?.title || ''}
-          placeholder="Lecture Title"
+          placeholder={t.lectureTitle}
           onClose={() => {
             setShowEditLecture(false);
             setEditingLecture(null);
@@ -259,7 +268,16 @@ const styles = StyleSheet.create({
     bottom: spacing.xl,
     left: 0,
     right: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  cameraFab: {
+    marginRight: spacing.sm,
+  },
+  micFab: {
+    marginLeft: spacing.sm,
   },
   emptyState: {
     alignItems: 'center',

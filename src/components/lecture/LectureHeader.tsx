@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Share2, Edit2, Trash2, Folder as FolderIcon } from 'lucide-react-native';
+import { Share2, Edit2, Trash2, Folder as FolderIcon, Camera } from 'lucide-react-native';
 import { colors, spacing, typography } from '../../constants/theme';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -11,6 +11,7 @@ interface LectureHeaderProps {
   onEdit: () => void;
   onDelete: () => void;
   onMoveToFolder: () => void;
+  onUploadPhotos?: () => void;
 }
 
 export const LectureHeader: React.FC<LectureHeaderProps> = ({
@@ -20,12 +21,18 @@ export const LectureHeader: React.FC<LectureHeaderProps> = ({
   onEdit,
   onDelete,
   onMoveToFolder,
+  onUploadPhotos,
 }) => {
   return (
     <View style={styles.container}>
       <View style={styles.top}>
         <Text style={styles.date}>{formatDate(date)}</Text>
         <View style={styles.actions}>
+          {onUploadPhotos && (
+            <TouchableOpacity onPress={onUploadPhotos}>
+              <Camera size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={onMoveToFolder}>
             <FolderIcon size={20} color={colors.text.tertiary} />
           </TouchableOpacity>

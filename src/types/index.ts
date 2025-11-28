@@ -13,6 +13,7 @@ export interface Lecture {
   chatHistory?: ChatMessage[];
   errorMessage?: string; // Store error details for failed lectures
   lastProcessingStep?: string; // Track which step failed
+  photoUris?: string[]; // Array of photo URIs for notes
 }
 
 export interface Folder {

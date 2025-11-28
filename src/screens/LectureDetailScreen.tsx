@@ -363,6 +363,7 @@ export default function LectureDetailScreen() {
         onEdit={() => setShowEditTitle(true)}
         onDelete={handleDelete}
         onMoveToFolder={() => setShowMoveFolder(true)}
+        onUploadPhotos={() => navigation.navigate('Camera', { lectureId: lecture.id })}
       />
 
       {lecture.status === 'failed' && (
