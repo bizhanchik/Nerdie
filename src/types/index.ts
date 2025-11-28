@@ -88,17 +88,20 @@ export interface LearningPackStatus {
   isComplete: boolean;
 }
 
+export type SupportedLanguage = 'en' | 'ru' | 'kk';
+
 export interface UserProfile {
   id: string;
   age?: number;
   interests: string[];
+  language: SupportedLanguage;
   hasCompletedOnboarding: boolean;
   createdAt: number;
 }
 
 export interface LessonQuestion {
   id: string;
-  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  type: 'multiple_choice' | 'true_false';
   question: string;
   options?: string[]; // For multiple choice
   correctAnswer: string;

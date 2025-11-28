@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
-import { ProcessingResponse, ChatMessage, TimestampReference, AIError, ProcessingStep, Lesson, LessonQuestion, UserProfile } from '../types';
+import { ProcessingResponse, ChatMessage, TimestampReference, AIError, ProcessingStep, Lesson, LessonQuestion, UserProfile, SupportedLanguage } from '../types';
 import * as FileSystem from 'expo-file-system';
+import { NativeModules, Platform } from 'react-native';
 
 // TODO: Move to .env or secure storage in production
 // For this prototype, we will ask the user to input it or hardcode it temporarily for testing if provided.
@@ -12,6 +13,41 @@ export const setOpenAIApiKey = (key: string) => {
 };
 
 const BASE_URL = 'https://api.openai.com/v1';
+
+// Helper to get language instruction for AI
+const getLanguageInstruction = (language: SupportedLanguage): string => {
+  switch (language) {
+    case 'ru':
+      return 'ВАЖНО: Весь контент урока должен быть на РУССКОМ языке. Генерируй все тексты, вопросы и объяснения на русском.';
+    case 'kk':
+      return 'МАҢЫЗДЫ: Барлық сабақ мазмұны ҚАЗАҚ тілінде болуы керек. Барлық мәтіндерді, сұрақтарды және түсіндірмелерді қазақ тілінде жаса.';
+    case 'en':
+    default:
+      return 'IMPORTANT: All lesson content should be in ENGLISH. Generate all texts, questions and explanations in English.';
+  }
+};
+
+// Helper to detect device language
+export const detectDeviceLanguage = (): SupportedLanguage => {
+  let deviceLanguage = 'en';
+
+  if (Platform.OS === 'ios') {
+    deviceLanguage = NativeModules.SettingsManager?.settings?.AppleLocale ||
+                     NativeModules.SettingsManager?.settings?.AppleLanguages?.[0] ||
+                     'en';
+  } else if (Platform.OS === 'android') {
+    deviceLanguage = NativeModules.I18nManager?.localeIdentifier || 'en';
+  }
+
+  const langCode = deviceLanguage.split('_')[0].toLowerCase();
+
+  if (langCode === 'ru' || langCode.startsWith('ru')) {
+    return 'ru';
+  } else if (langCode === 'kk' || langCode.startsWith('kk')) {
+    return 'kk';
+  }
+  return 'en';
+};
 
 // Helper function to create AIError from caught errors
 const createAIError = (error: any, step?: ProcessingStep): AIError => {
@@ -318,6 +354,9 @@ Now answer the student's question based on this lecture content.`;
       throw createAIError(new Error('API Key not set'));
     }
 
+    const language = userProfile?.language || 'en';
+    const languageInstruction = getLanguageInstruction(language);
+
     const personalizationContext = userProfile && userProfile.interests.length > 0
       ? `
 The student is ${userProfile.age ? `${userProfile.age} years old and` : ''} interested in: ${userProfile.interests.join(', ')}.
@@ -327,6 +366,8 @@ For example, if they're interested in "sports", use sports analogies. If interes
       : '';
 
     const prompt = `You are an expert educational content creator. Create an interactive lesson based on this lecture.
+
+${languageInstruction}
 
 LECTURE INFORMATION:
 Title: ${lectureTitle}
@@ -352,10 +393,10 @@ Create a comprehensive, engaging lesson with the following structure in JSON for
   "questions": [
     {
       "id": "1",
-      "type": "multiple_choice" | "true_false" | "short_answer",
+      "type": "multiple_choice" | "true_false",
       "question": "Question text",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
-      "correctAnswer": "The correct answer",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice, omit for true_false
+      "correctAnswer": "The correct answer (must match one of the options for multiple_choice)",
       "explanation": "Why this is correct and what concept it tests"
     },
     ... (generate 5-7 varied questions that test understanding, not just memorization)
@@ -364,12 +405,14 @@ Create a comprehensive, engaging lesson with the following structure in JSON for
 }
 
 IMPORTANT RULES:
-1. Make questions varied in type (mix of multiple choice, true/false, short answer)
-2. Questions should test understanding, application, and analysis - not just recall
-3. For multiple choice, provide 4 plausible options
-4. Explanations should teach, not just confirm the answer
-5. Content should be engaging and clear
-${personalizationContext ? '6. Use examples and analogies that relate to the student\'s interests whenever natural' : ''}`;
+1. ONLY use "multiple_choice" and "true_false" question types. DO NOT use "short_answer" type.
+2. For true/false questions, the correctAnswer must be exactly "True" or "False" (or translated equivalents in the target language)
+3. Make questions varied in type (mix of multiple choice and true/false)
+4. Questions should test understanding, application, and analysis - not just recall
+5. For multiple choice, provide 4 plausible options
+6. Explanations should teach, not just confirm the answer
+7. Content should be engaging and clear
+${personalizationContext ? '8. Use examples and analogies that relate to the student\'s interests whenever natural' : ''}`;
 
     try {
       const response = await axios.post(

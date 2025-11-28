@@ -10,15 +10,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Save, Key } from "lucide-react-native";
+import { Save, Key, Globe } from "lucide-react-native";
 import { setOpenAIApiKey } from "../services/openai";
+import { StorageService } from "../services/storage";
+import { SupportedLanguage } from "../types";
 import ScreenWrapper from "../components/ScreenWrapper";
+
+const LANGUAGES = [
+  { code: 'en' as SupportedLanguage, name: 'English', nativeName: 'English' },
+  { code: 'ru' as SupportedLanguage, name: 'Russian', nativeName: 'Русский' },
+  { code: 'kk' as SupportedLanguage, name: 'Kazakh', nativeName: 'Қазақша' },
+];
 
 export default function SettingsScreen() {
   const [apiKey, setApiKey] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>('en');
 
   useEffect(() => {
     loadApiKey();
+    loadLanguage();
   }, []);
 
   const loadApiKey = async () => {
@@ -33,6 +43,17 @@ export default function SettingsScreen() {
     }
   };
 
+  const loadLanguage = async () => {
+    try {
+      const profile = await StorageService.getUserProfile();
+      if (profile) {
+        setSelectedLanguage(profile.language);
+      }
+    } catch (e) {
+      console.error("Failed to load language", e);
+    }
+  };
+
   const saveApiKey = async () => {
     try {
       await AsyncStorage.setItem("OPENAI_API_KEY", apiKey);
@@ -40,6 +61,20 @@ export default function SettingsScreen() {
       Alert.alert("Success", "API Key saved!");
     } catch (e) {
       Alert.alert("Error", "Failed to save API key");
+    }
+  };
+
+  const handleLanguageChange = async (language: SupportedLanguage) => {
+    try {
+      const profile = await StorageService.getUserProfile();
+      if (profile) {
+        profile.language = language;
+        await StorageService.saveUserProfile(profile);
+        setSelectedLanguage(language);
+        Alert.alert("Success", "Language preference updated!");
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to update language");
     }
   };
 
@@ -73,6 +108,43 @@ export default function SettingsScreen() {
               <Save size={20} color="#fff" />
               <Text style={styles.saveButtonText}>Save Key</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Globe size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>Lesson Language</Text>
+            </View>
+
+            <Text style={styles.description}>
+              Choose the language for generated lessons. This affects all new lessons created from lectures.
+            </Text>
+
+            {LANGUAGES.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageOption,
+                  selectedLanguage === lang.code && styles.languageOptionSelected,
+                ]}
+                onPress={() => handleLanguageChange(lang.code)}
+              >
+                <View style={styles.languageInfo}>
+                  <Text style={[
+                    styles.languageName,
+                    selectedLanguage === lang.code && styles.languageNameSelected,
+                  ]}>
+                    {lang.nativeName}
+                  </Text>
+                  <Text style={styles.languageEnglishName}>{lang.name}</Text>
+                </View>
+                {selectedLanguage === lang.code && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -144,5 +216,49 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  languageOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    marginBottom: 12,
+    backgroundColor: "#f9f9f9",
+  },
+  languageOptionSelected: {
+    borderColor: "#007AFF",
+    backgroundColor: "#F0F7FF",
+  },
+  languageInfo: {
+    flex: 1,
+  },
+  languageName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 2,
+  },
+  languageNameSelected: {
+    color: "#007AFF",
+  },
+  languageEnglishName: {
+    fontSize: 14,
+    color: "#666",
+  },
+  checkmark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkmarkText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

@@ -234,43 +234,8 @@ export default function LessonTakeScreen() {
       );
     }
 
-    return (
-      <View style={styles.questionContainer}>
-        <Text style={styles.questionNumber}>
-          Question {currentQuestionIndex + 1} of {lesson?.questions.length}
-        </Text>
-        <Text style={styles.questionText}>{question.question}</Text>
-
-        <TextInput
-          style={styles.textInput}
-          value={userAnswer || ""}
-          onChangeText={(text) => handleAnswerSelect(text)}
-          placeholder="Type your answer here"
-          multiline
-          editable={!showExplanation}
-        />
-
-        {!showExplanation && userAnswer && (
-          <TouchableOpacity style={styles.submitButton} onPress={() => setShowExplanation(true)}>
-            <Text style={styles.submitButtonText}>Submit Answer</Text>
-          </TouchableOpacity>
-        )}
-
-        {showExplanation && (
-          <View style={[styles.explanationContainer, isCorrect ? styles.explanationCorrect : styles.explanationWrong]}>
-            <Text style={styles.explanationTitle}>
-              {isCorrect ? "Correct!" : "Here's the answer:"}
-            </Text>
-            {!isCorrect && (
-              <Text style={styles.correctAnswerText}>
-                Correct answer: {question.correctAnswer}
-              </Text>
-            )}
-            <Text style={styles.explanationText}>{question.explanation}</Text>
-          </View>
-        )}
-      </View>
-    );
+    // Fallback - should not reach here as we only use multiple_choice and true_false
+    return null;
   };
 
   if (loading) {

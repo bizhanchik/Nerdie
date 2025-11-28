@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserProfile } from "../types";
 import { StorageService } from "../services/storage";
+import { detectDeviceLanguage } from "../services/openai";
 
 interface OnboardingScreenProps {
   onComplete: () => void;
@@ -57,10 +58,13 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   };
 
   const handleComplete = async () => {
+    const detectedLanguage = detectDeviceLanguage();
+
     const profile: UserProfile = {
       id: Date.now().toString(),
       age: age ? parseInt(age) : undefined,
       interests: selectedInterests,
+      language: detectedLanguage,
       hasCompletedOnboarding: true,
       createdAt: Date.now(),
     };
