@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { ProcessingResponse, ChatMessage, TimestampReference, AIError, ProcessingStep } from '../types';
+import { ProcessingResponse, ChatMessage, TimestampReference, AIError, ProcessingStep, Lesson, LessonQuestion, UserProfile } from '../types';
 import * as FileSystem from 'expo-file-system';
 
 // TODO: Move to .env or secure storage in production
@@ -303,6 +303,111 @@ Now answer the student's question based on this lecture content.`;
       };
     } catch (error) {
       console.error('Chat error:', error);
+      throw createAIError(error);
+    }
+  },
+
+  async generatePersonalizedLesson(
+    lectureTitle: string,
+    transcription: string,
+    summary: string,
+    notes: string,
+    userProfile: UserProfile | null
+  ): Promise<Omit<Lesson, 'id' | 'lectureId' | 'createdAt' | 'completed'>> {
+    if (!API_KEY) {
+      throw createAIError(new Error('API Key not set'));
+    }
+
+    const personalizationContext = userProfile && userProfile.interests.length > 0
+      ? `
+The student is ${userProfile.age ? `${userProfile.age} years old and` : ''} interested in: ${userProfile.interests.join(', ')}.
+Please adapt explanations and examples to relate to these interests when possible.
+For example, if they're interested in "sports", use sports analogies. If interested in "music", use musical examples.
+`
+      : '';
+
+    const prompt = `You are an expert educational content creator. Create an interactive lesson based on this lecture.
+
+LECTURE INFORMATION:
+Title: ${lectureTitle}
+Summary: ${summary}
+
+Full Transcription:
+${transcription}
+
+Detailed Notes:
+${notes}
+
+${personalizationContext}
+
+Create a comprehensive, engaging lesson with the following structure in JSON format:
+{
+  "title": "Engaging lesson title (different from lecture title, focused on what students will learn)",
+  "description": "Brief description of what students will learn (2-3 sentences)",
+  "content": "Detailed lesson content in markdown format. Include:
+    - Clear explanations of key concepts
+    - Examples and analogies ${personalizationContext ? 'related to the student\'s interests' : ''}
+    - Visual formatting with headers, bullet points, bold/italic text
+    - Should be comprehensive but digestible (aim for ~500-800 words)",
+  "questions": [
+    {
+      "id": "1",
+      "type": "multiple_choice" | "true_false" | "short_answer",
+      "question": "Question text",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"], // Only for multiple_choice
+      "correctAnswer": "The correct answer",
+      "explanation": "Why this is correct and what concept it tests"
+    },
+    ... (generate 5-7 varied questions that test understanding, not just memorization)
+  ],
+  "estimatedDuration": 15 // Time in minutes to complete the lesson
+}
+
+IMPORTANT RULES:
+1. Make questions varied in type (mix of multiple choice, true/false, short answer)
+2. Questions should test understanding, application, and analysis - not just recall
+3. For multiple choice, provide 4 plausible options
+4. Explanations should teach, not just confirm the answer
+5. Content should be engaging and clear
+${personalizationContext ? '6. Use examples and analogies that relate to the student\'s interests whenever natural' : ''}`;
+
+    try {
+      const response = await axios.post(
+        `${BASE_URL}/chat/completions`,
+        {
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert educational content creator who creates engaging, personalized lessons. Output only valid JSON.'
+            },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const content = response.data.choices[0].message.content;
+      const lessonData = JSON.parse(content);
+
+      return {
+        title: lessonData.title,
+        description: lessonData.description,
+        content: lessonData.content,
+        questions: lessonData.questions,
+        estimatedDuration: lessonData.estimatedDuration || 15,
+        score: undefined,
+        completedAt: undefined,
+      };
+    } catch (error) {
+      console.error('Lesson generation error:', error);
       throw createAIError(error);
     }
   }

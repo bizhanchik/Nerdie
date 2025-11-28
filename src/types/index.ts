@@ -87,3 +87,43 @@ export interface LearningPackStatus {
   completionPercentage: number;
   isComplete: boolean;
 }
+
+export interface UserProfile {
+  id: string;
+  age?: number;
+  interests: string[];
+  hasCompletedOnboarding: boolean;
+  createdAt: number;
+}
+
+export interface LessonQuestion {
+  id: string;
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  question: string;
+  options?: string[]; // For multiple choice
+  correctAnswer: string;
+  explanation: string;
+  relatedTimestamp?: number; // Link to lecture timestamp
+}
+
+export interface Lesson {
+  id: string;
+  lectureId: string;
+  title: string;
+  description: string;
+  content: string; // Main lesson content in markdown
+  questions: LessonQuestion[];
+  estimatedDuration: number; // in minutes
+  createdAt: number;
+  completed: boolean;
+  score?: number; // percentage 0-100
+  completedAt?: number;
+}
+
+export interface LessonProgress {
+  lessonId: string;
+  currentQuestionIndex: number;
+  answers: Record<string, string>; // questionId -> userAnswer
+  startedAt: number;
+  lastUpdatedAt: number;
+}

@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { StorageService } from '../services/storage';
 import { OpenAIService } from '../services/openai';
-import { Lecture, ProcessingProgress, AIError } from '../types';
+import { Lecture, ProcessingProgress, AIError, Lesson } from '../types';
 import { useRecording } from '../hooks/useRecording';
 import { WaveformVisualizer } from '../components/record/WaveformVisualizer';
 import { RecordingHeader } from '../components/record/RecordingHeader';
@@ -141,13 +141,13 @@ export default function RecordScreen() {
       newLecture.notes = materials.notes;
       await StorageService.saveLecture(newLecture);
 
-      // Step 4: Assembly (100%)
+      // Step 4: Assembly and Lesson Generation (100%)
       setProgress({
         currentStep: 'assembly',
         stepNumber: 4,
         totalSteps: 4,
         stepName: 'Assembling Learning Pack',
-        progress: 90,
+        progress: 80,
         message: 'Finalizing your materials...',
       });
 
@@ -165,6 +165,39 @@ export default function RecordScreen() {
 
       newLecture.status = 'processed';
       await StorageService.saveLecture(newLecture);
+
+      // Generate personalized lesson
+      setProgress(prev => ({ ...prev, progress: 85, message: 'Generating personalized lesson...' }));
+
+      try {
+        const userProfile = await StorageService.getUserProfile();
+
+        const lessonData = await OpenAIService.generatePersonalizedLesson(
+          newLecture.title,
+          fullTranscription,
+          newLecture.summary!,
+          newLecture.notes!,
+          userProfile
+        );
+
+        const lesson: Lesson = {
+          id: `lesson_${lectureId}`,
+          lectureId: newLecture.id,
+          title: lessonData.title,
+          description: lessonData.description,
+          content: lessonData.content,
+          questions: lessonData.questions,
+          estimatedDuration: lessonData.estimatedDuration,
+          createdAt: Date.now(),
+          completed: false,
+        };
+
+        await StorageService.saveLesson(lesson);
+        setProgress(prev => ({ ...prev, progress: 95, message: 'Lesson created successfully!' }));
+      } catch (lessonError) {
+        console.warn('Lesson generation failed, but continuing', lessonError);
+        // Don't fail the whole process if lesson generation fails
+      }
 
       setProgress(prev => ({ ...prev, progress: 100, message: 'Complete!' }));
 

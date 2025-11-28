@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Share, Alert, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { RefreshCw, AlertCircle } from 'lucide-react-native';
+import { RefreshCw, AlertCircle, GraduationCap } from 'lucide-react-native';
 import { RootStackParamList } from '../../App';
 import { StorageService } from '../services/storage';
 import { OpenAIService } from '../services/openai';
-import { Lecture, Folder, TimestampReference, ChatMessage, ProcessingProgress, AIError } from '../types';
+import { Lecture, Folder, TimestampReference, ChatMessage, ProcessingProgress, AIError, Lesson } from '../types';
 import { LectureHeader } from '../components/lecture/LectureHeader';
 import { TabBar, TabType } from '../components/lecture/TabBar';
 import { SummaryTab } from '../components/lecture/SummaryTab';
@@ -41,11 +41,21 @@ export default function LectureDetailScreen() {
   });
   const [error, setError] = useState<AIError | null>(null);
   const [showError, setShowError] = useState(false);
+  const [isGeneratingLesson, setIsGeneratingLesson] = useState(false);
+  const [existingLesson, setExistingLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
     loadLecture();
     loadFolders();
+    checkExistingLesson();
   }, [lectureId]);
+
+  const checkExistingLesson = async () => {
+    const lessons = await StorageService.getLessonsByLectureId(lectureId);
+    if (lessons.length > 0) {
+      setExistingLesson(lessons[0]);
+    }
+  };
 
   const loadLecture = async () => {
     const data = await StorageService.getLectureById(lectureId);
@@ -248,6 +258,94 @@ export default function LectureDetailScreen() {
     }
   };
 
+  const handleGenerateLesson = async () => {
+    if (!lecture || !lecture.transcription || !lecture.summary || !lecture.notes) {
+      Alert.alert(
+        'Cannot Generate Lesson',
+        'This lecture needs to be fully processed before a lesson can be generated.'
+      );
+      return;
+    }
+
+    if (existingLesson) {
+      Alert.alert(
+        'Lesson Already Exists',
+        'A lesson already exists for this lecture. Would you like to view it or regenerate?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'View Lesson',
+            onPress: () => navigation.navigate('LessonDetail', { lessonId: existingLesson.id }),
+          },
+          {
+            text: 'Regenerate',
+            style: 'destructive',
+            onPress: () => generateNewLesson(),
+          },
+        ]
+      );
+      return;
+    }
+
+    generateNewLesson();
+  };
+
+  const generateNewLesson = async () => {
+    if (!lecture || !lecture.transcription || !lecture.summary || !lecture.notes) return;
+
+    setIsGeneratingLesson(true);
+
+    try {
+      const userProfile = await StorageService.getUserProfile();
+
+      const lessonData = await OpenAIService.generatePersonalizedLesson(
+        lecture.title,
+        lecture.transcription,
+        lecture.summary,
+        lecture.notes,
+        userProfile
+      );
+
+      const lesson: Lesson = {
+        id: existingLesson ? existingLesson.id : `lesson_${lectureId}_${Date.now()}`,
+        lectureId: lecture.id,
+        title: lessonData.title,
+        description: lessonData.description,
+        content: lessonData.content,
+        questions: lessonData.questions,
+        estimatedDuration: lessonData.estimatedDuration,
+        createdAt: Date.now(),
+        completed: false,
+      };
+
+      await StorageService.saveLesson(lesson);
+      setExistingLesson(lesson);
+
+      setIsGeneratingLesson(false);
+
+      Alert.alert(
+        'Lesson Created!',
+        'Your personalized lesson has been generated. Would you like to start it now?',
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Start Lesson',
+            onPress: () => navigation.navigate('LessonDetail', { lessonId: lesson.id }),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Lesson generation failed', error);
+      setIsGeneratingLesson(false);
+
+      Alert.alert(
+        'Generation Failed',
+        'Failed to generate lesson. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   if (!lecture) {
     return (
       <View style={styles.loadingContainer}>
@@ -284,6 +382,44 @@ export default function LectureDetailScreen() {
           >
             <RefreshCw size={16} color={colors.background.primary} />
             <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {lecture.status === 'processed' && (
+        <View style={styles.lessonBanner}>
+          <View style={styles.lessonBannerContent}>
+            <GraduationCap size={24} color={colors.primary} />
+            <View style={styles.lessonBannerText}>
+              <Text style={styles.lessonBannerTitle}>
+                {existingLesson ? 'Lesson Available' : 'Create Interactive Lesson'}
+              </Text>
+              <Text style={styles.lessonBannerMessage}>
+                {existingLesson
+                  ? 'Test your knowledge with a personalized quiz'
+                  : 'Generate a personalized lesson with quiz from this lecture'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.lessonButton}
+            onPress={
+              existingLesson
+                ? () => navigation.navigate('LessonDetail', { lessonId: existingLesson.id })
+                : handleGenerateLesson
+            }
+            disabled={isGeneratingLesson}
+          >
+            {isGeneratingLesson ? (
+              <ActivityIndicator size="small" color={colors.background.primary} />
+            ) : (
+              <>
+                <GraduationCap size={16} color={colors.background.primary} />
+                <Text style={styles.lessonButtonText}>
+                  {existingLesson ? 'Start Lesson' : 'Generate Lesson'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -397,6 +533,50 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   retryButtonText: {
+    ...typography.callout,
+    color: colors.background.primary,
+    fontWeight: '600',
+  },
+  lessonBanner: {
+    backgroundColor: colors.primary + '10',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    padding: spacing.lg,
+    margin: spacing.lg,
+    marginBottom: 0,
+    borderRadius: borderRadius.md,
+    gap: spacing.md,
+  },
+  lessonBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  lessonBannerText: {
+    flex: 1,
+  },
+  lessonBannerTitle: {
+    ...typography.callout,
+    color: colors.primary,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  lessonBannerMessage: {
+    ...typography.footnote,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  lessonButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  lessonButtonText: {
     ...typography.callout,
     color: colors.background.primary,
     fontWeight: '600',
